@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase
+import random
 
 unit_info = {
     "R": "Rankine temperature scale",
@@ -121,6 +122,53 @@ def ingest_rul_metadata_tx(tx, dataset_name, datafile_name, file_type, unit_info
         MERGE (df)-[:HAS_FEATURE]->(f)
     """, file=datafile_name)
 
+    
+
+    def create_asset_and_link(tx, asset_name, datafile_name):
+        """
+        Create an Asset node with asset_id (random number) and asset_type='turbofan_engine',
+        and link it to a DataFile node with a 'linked_asset' relationship.
+        """
+        asset_id = random.randint(100000, 999999)
+        tx.run("""
+            MERGE (a:Asset {name: $asset_name})
+            ON CREATE SET a.asset_id = $asset_id, a.asset_type = 'turbofan_engine'
+            ON MATCH SET a.asset_type = 'turbofan_engine'
+            MERGE (df:DataFile {name: $datafile_name})
+            MERGE (df)-[:linked_asset]->(a)
+        """, asset_name=asset_name, datafile_name=datafile_name, asset_id=asset_id)
+
+    def create_asset_and_link_to_datafile(self, asset_name, datafile_name):
+        """
+        Public method to create an Asset node and link it to a DataFile node.
+        """
+        with self.driver.session() as session:
+            session.execute_write(create_asset_and_link, asset_name, datafile_name)
+
+    # Add the method to MetadataIngest class
+    MetadataIngest.create_asset_and_link_to_datafile = create_asset_and_link_to_datafile
+
+
+    def create_storage_and_link(tx, datafile_name, storage_type, storage_path, storage_url, storage_name):
+        """
+        Create a Storage node with given type and path, and link it to a DataFile node.
+        """
+        tx.run("""
+            MERGE (s:Storage {type: $storage_type, path: $storage_path, storage_url: $storage_url, storage_name: $storage_name})
+            MERGE (df:DataFile {name: $datafile_name})
+            MERGE (df)-[:is_stored_in]->(s)
+        """, storage_type=storage_type, storage_path=storage_path, datafile_name=datafile_name, storage_url=storage_url, storage_name = storage_name )
+
+    def create_storage_and_link_to_datafile(self, datafile_name, storage_type, storage_path, storage_url, storage_name):
+        """
+        Public method to create a Storage node and link it to a DataFile node.
+        """
+        with self.driver.session() as session:
+            session.execute_write(create_storage_and_link, datafile_name, storage_type, storage_path, storage_url, storage_name )
+
+    # Add the method to MetadataIngest class
+    MetadataIngest.create_storage_and_link_to_datafile = create_storage_and_link_to_datafile
+
 if __name__ == "__main__":
     URI = "bolt://localhost:7687"
     USER = "neo4j"
@@ -138,6 +186,22 @@ if __name__ == "__main__":
 
         ingest.ingest_rul_metadata("N-CMAPSS", "RUL_FD001", "RUL")
         print("Successfully ingested RUL_FD001 metadata.")
+
+        ingest.create_asset_and_link_to_datafile("FD001", "train_FD001")
+        print("Successfully created and linked assset FD001 to train_FD001.")
+
+        ingest.create_asset_and_link_to_datafile("FD001", "test_FD001")
+        print("Successfully created and linked asset FD001 to test_FD001.")
+
+        ingest.create_storage_and_link_to_datafile("train_FD001", "minio", "/data/train/train_FD001.txt", "localhost:9009", "train_fd001_storage")
+        print("Successfully created and linked minio storage for train_FD001.")
+
+        # ingest.create_storage_and_link_to_datafile("test_FD001", "local", "/data/test_FD001.csv")
+        # print("Successfully created and linked storage for test_FD001.")
+
+        # ingest.create_storage_and_link_to_datafile("RUL_FD001", "local", "/data/RUL_FD001.csv")
+        # print("Successfully created and linked storage for RUL_FD001.")
+
 
     except Exception as e:
         print(f"Error during ingestion: {e}")

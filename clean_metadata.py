@@ -10,7 +10,7 @@ def clean_metadata(tx):
     # You can narrow the deletion scope by adjusting labels below
     query = """
     MATCH (n)
-    WHERE any(label IN labels(n) WHERE label IN ['Dataset','DataFile', 'Feature', 'Category', 'Unit'])
+    WHERE any(label IN labels(n) WHERE label IN ['Dataset','DataFile', 'Feature', 'Category', 'Unit', 'Asset', 'Storage'])
     DETACH DELETE n
     """
     tx.run(query)
